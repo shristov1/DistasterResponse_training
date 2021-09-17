@@ -1,24 +1,60 @@
 import sys
+from sqlalchemy import create_engine
+import nltk
+nltk.download(['punkt', 'wordnet', 'averaged_perceptron_tagger'])
 
+import pandas as pd
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+
+from sklearn.metrics import classification_report
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+import joblib
 
 def load_data(database_filepath):
-    pass
+    engine = create_engine(f'sqlite:///{database_filepath}')
+    df = pd.read_sql_table('DisasterResponse', engine)
+    X = df['message'].values
+    Y = df.iloc[:, 5:].values
+    category_names = df.columns[5:]
+    return X, Y, category_names
 
 
 def tokenize(text):
-    pass
+    tokens = word_tokenize(text)
+    lemmatizer = WordNetLemmatizer()
+
+    clean_tokens = []
+    for tok in tokens:
+        clean_tok = lemmatizer.lemmatize(tok).lower().strip()
+        clean_tokens.append(clean_tok)
+
+    return clean_tokens
 
 
-def build_model():
-    pass
+def build_model() -> Pipeline:
+    pipeline = Pipeline([
+        ('vect', CountVectorizer(tokenizer=tokenize)),
+        ('tfidf', TfidfTransformer()),
+        ('clf', MultiOutputClassifier(RandomForestClassifier()))
+    ])
+    return pipeline
 
 
-def evaluate_model(model, X_test, Y_test, category_names):
-    pass
+def evaluate_model(model, X_test, Y_test, category_names) -> None:
+    report = (classification_report(Y_test, model.predict(X_test), output_dict=True))
+    report_df = pd.DataFrame(report).transpose()
+    report_df = report_df.iloc[:-4, :]
+    report_df['categories'] = category_names
+    print(report_df)
 
 
-def save_model(model, model_filepath):
-    pass
+def save_model(model, model_filepath) -> None:
+    joblib.dump(model, model_filepath)
 
 
 def main():
